@@ -1,10 +1,31 @@
 import cv2
 import numpy as np
+import argparse
 
+
+def main():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input')
+    parser.add_argument('--output')
+    parser.add_argument("--threshold", action="store_true")
+    args = parser.parse_args()
+    image = cv2.imread(args.input,0)
+
+    # get the threshold
+    threshold = otsu(image)
+
+    if(args.threshold):
+        print(threshold)
+
+    # threshold the image
+    image = apply_thresh(image, threshold)
+    cv2.imwrite(args.output, image)
 
 
 def otsu(image):	
 
+	# convert the image to sorted 1-d array
 	sorted_pix = image.ravel()
 	length = float(len(sorted_pix))
 	candidates = []
@@ -23,13 +44,17 @@ def otsu(image):
 	    u2 = np.sum(noduels*sorted_pix)/sum2
 	    result = w1*w2*(u1-u2)**2
 	    candidates.append(result)
-
 	threshold = np.argmax(candidates)
-	image = (image > threshold)*255
 
+	return threshold
+
+
+def apply_thresh(image, threshold):
+
+	image = (image > threshold)*255
+	
 	return np.array(image, dtype=np.uint8)
 
-# image =cv2.imread('ductile_iron2-0.jpg',0)
-# image = otsu(image)
-# cv2.imshow('image',image)
-# cv2.waitKey(0)
+
+if __name__ == "__main__":
+    main()
