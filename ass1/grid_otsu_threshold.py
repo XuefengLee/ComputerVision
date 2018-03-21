@@ -82,7 +82,7 @@ def otsu(image):
 
 	# if the pixel value range of a cell is less than a threshold
 	# then label it in thresholds matrix
-	if max(sorted_pix) - min(sorted_pix) < 80:
+	if max(sorted_pix) - min(sorted_pix) < 30:
 		return 0
 
 	for i in range(255):
