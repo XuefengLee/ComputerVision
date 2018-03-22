@@ -41,14 +41,21 @@ def connected_comp(image, threshold=50):
 
 			neighbours = []
 			
-			# up
+			# North
 			if row - 1 >= 0 and elements[row-1,col] != 0:
 				neighbours.append(elements[row-1,col])
 
-			# left
+			# West
 			if col - 1 >= 0 and elements[row,col-1] != 0:
 				neighbours.append(elements[row,col-1])
 			
+			# North East
+			if row - 1 >= 0 and col + 1 < image_w and elements[row-1,col+1] != 0:
+				neighbours.append(elements[row-1,col])
+
+			# North West
+			if row - 1 >= 0 and col - 1 > 0 and elements[row-1,col-1] != 0:
+				neighbours.append(elements[row-1,col])
 
 			if len(neighbours) == 0:
 				elements[row,col] = label

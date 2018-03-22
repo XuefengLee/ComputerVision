@@ -80,9 +80,11 @@ def otsu(image):
 	length = float(len(sorted_pix))
 	candidates = []
 
-	# if the pixel value range of a cell is less than a threshold
+	# if the variance of pixel values is less than a threshold
 	# then label it in thresholds matrix
-	if max(sorted_pix) - min(sorted_pix) < 30:
+	var = np.var(sorted_pix)
+
+	if var < 500:
 		return 0
 
 	for i in range(255):
