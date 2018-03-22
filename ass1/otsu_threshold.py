@@ -30,11 +30,11 @@ def otsu(image):
 	length = float(len(sorted_pix))
 	candidates = []
 
-	for i in range(255):
+	for i in range(256):
 	    backs = sorted_pix > i
 	    noduels = sorted_pix <= i
-	    sum1 = np.sum(backs,dtype=np.float32)
-	    sum2 = np.sum(noduels,dtype=np.float32)
+	    sum1 = float(np.sum(backs))
+	    sum2 = float(np.sum(noduels))
 	    if sum1 == 0 or sum2 == 0:
 	        candidates.append(0)
 	        continue

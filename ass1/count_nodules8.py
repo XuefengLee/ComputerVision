@@ -1,10 +1,8 @@
 import cv2
 import numpy as np
-import otsu_threshold as otsu_threshold
 import argparse
+
 BACKGROUND = 255
-
-
 
 def main():
 
@@ -54,7 +52,7 @@ def connected_comp(image, threshold=50):
 				neighbours.append(elements[row-1,col+1])
 
 			# North West
-			if row - 1 >= 0 and col - 1 > 0 and elements[row-1,col-1] != 0:
+			if row - 1 >= 0 and col - 1 >= 0 and elements[row-1,col-1] != 0:
 				neighbours.append(elements[row-1,col-1])
 
 			if len(neighbours) == 0:

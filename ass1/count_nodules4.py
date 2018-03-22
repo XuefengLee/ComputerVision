@@ -1,12 +1,11 @@
 import cv2
 import numpy as np
-import otsu_threshold as otsu_threshold
 import argparse
+
 BACKGROUND = 255
 
-
-
 def main():
+
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--input')
 	parser.add_argument('--size')
@@ -122,10 +121,12 @@ def convert_image(image, deleted):
 
 	labels = []
 
-	# normalize the matrix so each label is in the 0-255
+	# normalize the matrix so each label is in 0-255
 	image = image/float(amax) * 255
 
-	# convert gray to rgb
+	# convert gray to rgb so that each label can have different colour
+	# for better visualization (the uniqueness is guaranteed since the 
+	# value in the first channel is unique)
 	image = np.stack((image,)*3, -1)*3%256
 	image[:,:,2] = image[:,:,2]*3%256
 	image[:,:,1] = image[:,:,1]*7%256
