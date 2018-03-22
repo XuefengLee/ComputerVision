@@ -7,6 +7,7 @@ BACKGROUND = 255
 
 
 def main():
+
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--input')
 	parser.add_argument('--size')
@@ -16,8 +17,7 @@ def main():
 	image = cv2.imread(args.input,0)
 	n = int(args.size)
 
-	threshold = otsu_threshold.otsu(image)
-	image = otsu_threshold.apply_thresh(image,threshold)
+
 	image = connected_comp(image)
 	n, deleted = count(image,n)
 	print(n)
@@ -50,12 +50,12 @@ def connected_comp(image, threshold=50):
 				neighbours.append(elements[row,col-1])
 			
 			# North East
-			if row - 1 >= 0 and col + 1 < image_w and elements[row-1,col+1] != 0:
-				neighbours.append(elements[row-1,col])
+			if row - 1 >= 0 and col + 1 < img_w and elements[row-1,col+1] != 0:
+				neighbours.append(elements[row-1,col+1])
 
 			# North West
 			if row - 1 >= 0 and col - 1 > 0 and elements[row-1,col-1] != 0:
-				neighbours.append(elements[row-1,col])
+				neighbours.append(elements[row-1,col-1])
 
 			if len(neighbours) == 0:
 				elements[row,col] = label
@@ -65,7 +65,7 @@ def connected_comp(image, threshold=50):
 			else:
 				elements[row,col] = min([neighbour for neighbour in neighbours])
 				if len(neighbours) > 1:
-					union(parent,neighbours[0],neighbours[1])
+					union(parent,neighbours)
 
 	for row in range(img_h):
 		for col in range(img_w):
@@ -96,8 +96,8 @@ def count(elements,threshold):
 		else:
 			deleted.append(key)
 
-
-	return num, deleted
+	# throw background color
+	return num - 1, deleted
 
 
 
@@ -108,17 +108,15 @@ def find_parent(parent,i):
 	if parent[i]!= -1:
 		return find_parent(parent,parent[i])
 
-def union(parent,x,y):
-	x_set = find_parent(parent, x)
-	y_set = find_parent(parent, y)
+def union(parent, neighbours):
+	par = min([find_parent(parent,item) for item in neighbours])
 
-	if x_set == y_set:
-		return
+	for item in neighbours:
+		value = find_parent(parent, item)
+		if value == par:
+			continue
+		parent[item] = par 
 
-	if x_set > y_set:
-		parent[x_set] = y_set
-	else:
-		parent[y_set] = x_set
 
 def convert_image(image, deleted):
 	row, col = image.shape

@@ -16,8 +16,6 @@ def main():
 	image = cv2.imread(args.input,0)
 	n = int(args.size)
 
-	threshold = otsu_threshold.otsu(image)
-	image = otsu_threshold.apply_thresh(image,threshold)
 	image = connected_comp(image)
 	n, deleted = count(image,n)
 	print(n)
@@ -89,8 +87,8 @@ def count(elements,threshold):
 		else:
 			deleted.append(key)
 
-
-	return num, deleted
+	# throw background color
+	return num - 1, deleted
 
 
 
@@ -102,16 +100,16 @@ def find_parent(parent,i):
 		return find_parent(parent,parent[i])
 
 def union(parent,x,y):
-	x_set = find_parent(parent, x)
-	y_set = find_parent(parent, y)
+	x = find_parent(parent, x)
+	y = find_parent(parent, y)
 
-	if x_set == y_set:
+	if x == y:
 		return
 
-	if x_set > y_set:
-		parent[x_set] = y_set
+	if x > y:
+		parent[x] = y
 	else:
-		parent[y_set] = x_set
+		parent[y] = x
 
 def convert_image(image, deleted):
 	row, col = image.shape
