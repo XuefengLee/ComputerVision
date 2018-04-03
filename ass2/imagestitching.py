@@ -6,7 +6,15 @@ import os
 
 def up_to_step_1(imgs):
     """Complete pipeline up to step 3: Detecting features and descriptors"""
-    # ... your code here ...
+    #output = set()
+    for img in imgs:
+        gray= cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+        sift = cv2.xfeatures2d.SIFT_create()
+        kp,des = sift.detectAndCompute(gray,None)
+        img = cv2.drawKeypoints(gray,kp,img)
+        #output.add(img)
+
+        cv2.imwrite('sift_keypoints.jpg',img)
     return imgs
 
 
