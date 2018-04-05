@@ -52,28 +52,38 @@ def up_to_step_2(imgs):
 			,cv2.DMatch(i, index[1], dists[i][index[1]])))
 
 
+
 	good = []
 	for a,b in matches:
 
-		if a.distance < 0.75*b.distance:
+		if a.distance < 0.4*b.distance:
 			# print(str(a.distance) + ' ' + str(b.distance))
 
 			good.append(a)
 
 	# img2 = cv2.drawMatches(m[0],m[1],n[0],n[1],good,None)
 
-	# cv2.imwrite('what1.jpg',img2)
+	# cv2.imwrite('what2.jpg',img2)
 
 	# Step 3
-	src_pts = np.float32([ m[1][v.queryIdx].pt for v in good ])
+	src_pts = np.float32([ np.append(m[1][v.queryIdx].pt,1) for v in good ])
 	dst_pts = np.float32([ n[1][v.trainIdx].pt for v in good ])
 
-	H = findHomography(src_pts, dst_pts)
+	for _ in range(1):
 
-	dsize = m[0].shape
-	# print(dsize)
-	out = cv2.warpPerspective(m[0], H, dsize)
-	cv2.imwrite('warp.jpg', out)
+		H = findHomography(src_pts, dst_pts)
+		print(src_pts.shape)
+		out = np.matmul(H,src_pts.transpose()).transpose()
+		# print(out)
+		# print(out[:,:2]/out[:,[-1]])
+		# print(dst_pts)
+		# print(np.sum((out[:,:2]/out[:,[-1]] - dst_pts)**2))
+
+
+	# dsize = m[0].shape
+	# # print(dsize)
+	# out = cv2.warpPerspective(m[0], H, dsize)
+	# cv2.imwrite('warp.jpg', out)
 	# print(H)
 	# cv2.imwrite('what1.jpg',img2)
 	return imgs, []
@@ -87,9 +97,6 @@ def findHomography(src, dst):
 		A.append([x1, y1, 1, 0, 0, 0, -x2*x1, -x2*y1, -x2])
 		A.append([0, 0, 0, x1, y1, 1, -y2*x1, -y2*y1, -y2])
 
-	# a = [-1,-1,-1,0,0,0,-1,-1,-1]
-	# b = [0,0,0,-1,-1,-1,1,1,1]
-	# mat = np.array([a,b])
 	U, S, Vh = np.linalg.svd(A)
 	L = Vh[-1,:] / Vh[-1,-1]
 	H = L.reshape(3, 3)
