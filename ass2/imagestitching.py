@@ -34,7 +34,7 @@ def up_to_step_2(imgs):
 		sift = cv2.xfeatures2d.SIFT_create()
 		kp,des = sift.detectAndCompute(gray,None)
 		img = cv2.drawKeypoints(gray,kp,img)
-		images.append((img,kp,des))
+		images.append((gray,kp,des))
 
 	images = images[::-1]
 	m,n = images[0],images[1]
@@ -60,21 +60,21 @@ def up_to_step_2(imgs):
 
 			good.append(a)
 
-	# img2 = cv2.drawMatchesKnn(m[0],m[1],n[0],n[1],good,None,flags=2)
+	# img2 = cv2.drawMatches(m[0],m[1],n[0],n[1],good,None)
 
-
+	# cv2.imwrite('what1.jpg',img2)
 
 	# Step 3
-	# for m in good:
-	# 	print(m.queryIdx)
-	# 	print(m.trainIdx)
 	src_pts = np.float32([ m[1][v.queryIdx].pt for v in good ])
 	dst_pts = np.float32([ n[1][v.trainIdx].pt for v in good ])
 
-	H = findHomography(src_pts[:8], dst_pts[:8])
+	H = findHomography(src_pts, dst_pts)
 
-
-
+	dsize = m[0].shape
+	# print(dsize)
+	out = cv2.warpPerspective(m[0], H, dsize)
+	cv2.imwrite('warp.jpg', out)
+	# print(H)
 	# cv2.imwrite('what1.jpg',img2)
 	return imgs, []
 
