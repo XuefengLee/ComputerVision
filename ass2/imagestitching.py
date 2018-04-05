@@ -61,29 +61,38 @@ def up_to_step_2(imgs):
 
 			good.append(a)
 
-	# img2 = cv2.drawMatches(m[0],m[1],n[0],n[1],good,None)
+	img2 = cv2.drawMatches(m[0],m[1],n[0],n[1],good,None)
 
-	# cv2.imwrite('what2.jpg',img2)
+	cv2.imwrite('what2.jpg',img2)
 
 	# Step 3
 	src_pts = np.float32([ np.append(m[1][v.queryIdx].pt,1) for v in good ])
 	dst_pts = np.float32([ n[1][v.trainIdx].pt for v in good ])
 
-	for _ in range(1):
 
-		H = findHomography(src_pts, dst_pts)
-		print(src_pts.shape)
+
+	min_num = np.inf
+	Homo = None
+	for _ in range(100):
+		idx = np.random.randint(len(src_pts), size=8)
+		H = findHomography(src_pts[idx,:], dst_pts[idx,:])
 		out = np.matmul(H,src_pts.transpose()).transpose()
-		# print(out)
-		# print(out[:,:2]/out[:,[-1]])
-		# print(dst_pts)
-		# print(np.sum((out[:,:2]/out[:,[-1]] - dst_pts)**2))
+
+		error = np.sqrt((out[:,:2]/out[:,[-1]] - dst_pts)**2)
+		print(np.sum(error,axis=1))
+		error = np.where(error > 3, 1, 0)
+		num = np.sum(error)
+
+		if num < min_num:
+			min_num = num
+			Homo = H
 
 
-	# dsize = m[0].shape
-	# # print(dsize)
-	# out = cv2.warpPerspective(m[0], H, dsize)
-	# cv2.imwrite('warp.jpg', out)
+
+	print(min_num)
+	dsize = m[0].shape
+	out = cv2.warpPerspective(m[0], H, dsize)
+	cv2.imwrite('warp2.jpg', out)
 	# print(H)
 	# cv2.imwrite('what1.jpg',img2)
 	return imgs, []
