@@ -52,9 +52,9 @@ def up_to_step_3(imgs):
 			images.append(img)
 			H = ransac(good,data[query],data[train])
 
-			dsize = data[query][1].shape[0:2]
-			out = cv2.warpPerspective(data[query][1], H,dsize)
-			cv2.imwrite('warps/' + str(train) + str(query) + '.jpg', out)
+			Query = linear_transformation(data[query][1], H)
+
+			cv2.imwrite('warps/' + str(train) + str(query) + '.jpg', Query)
 
 def up_to_step_3_copy(imgs):
 	images = []
@@ -227,6 +227,151 @@ def ransac(good,query,train):
 			Homo = H
 
 	return Homo
+
+def linearTransferImage(img, h ,inverse):
+
+	height, width, depth = img.shape
+
+	coordinate = np.append(np.mgrid[0:width, 0:height].reshape((2, width*height)),[np.ones(height*width)],axis=0)
+
+
+	coordinate = h.dot(coordinate)
+	coordinate /= coordinate[2, :]
+	minX = np.min(coordinate[0, :])
+	maxX = np.max(coordinate[0, :])
+	minY = np.min(coordinate[1, :])
+	maxY = np.max(coordinate[1, :])
+
+	print('newrange', minX, minY,maxX,maxY)
+	rangeW = int(maxX - minX)
+	rangeH = int(maxY - minY)
+
+	# indY, indX = np.indices((rangeH, rangeW))
+	# newPictureIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
+
+
+	# newPictureIndex = np.append(np.mgrid[0:rangeW, 0:rangeH].reshape((2, rangeW*rangeH)),[np.ones(rangeW*rangeH)],axis=0)
+	# print(newPictureIndex.shape)
+	indY, indX = np.indices((rangeH, rangeW))
+	newPictureIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
+	print(newPictureIndex.shape)
+
+	newPictureIndex[0, :] += minX
+	newPictureIndex[1, :] += minY
+
+	mapToOriginalImgPoints = inverse.dot(newPictureIndex)
+	mapToOriginalImgPoints /= mapToOriginalImgPoints[2, :]
+
+	dst = np.ones([rangeH, rangeW, depth])
+	#
+	map_x = mapToOriginalImgPoints[0]
+	map_y = mapToOriginalImgPoints[1]
+
+	map_x = map_x.reshape(rangeH, rangeW).astype(np.int)
+	map_y = map_y.reshape(rangeH, rangeW).astype(np.int)
+
+	# for i in range(rangeH):
+	# 	for j in range(rangeW):
+	# 		indexX = map_x[i][j]
+	# 		indexY = map_y[i][j]
+	# 		if indexX > width-1 or indexY > height-1 or indexX < 0 or indexY < 0:
+	# 			continue
+	# 		value = img[indexY][indexX]
+	# 		dst[i][j] = value
+	# return None
+
+	# np.take(, indices, mode='wrap')
+
+
+	return dst
+
+def linear_transformation(img, a):
+
+	M, N, D = img.shape
+	points = np.append(np.mgrid[0:N, 0:M].reshape((2, M*N)),[np.ones(M*N)],axis=0)
+
+	affine_points = a.dot(points)
+	affine_points /= affine_points[2, :]
+
+	minX = np.min(affine_points[0, :])
+	minY = np.min(affine_points[1, :])
+	maxX = np.max(affine_points[0, :])
+	maxY = np.max(affine_points[1, :])
+
+	rangeW = int(maxX - minX)
+	rangeH = int(maxY - minY)
+
+	indY, indX = np.indices((rangeH, rangeW))
+	newPictureIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
+	newPictureIndex[0, :] += minX
+	newPictureIndex[1, :] += minY
+
+	mapToOriginalImgPoints = np.linalg.inv(a).dot(newPictureIndex)
+
+	mapToOriginalImgPoints /= mapToOriginalImgPoints[2, :]
+
+	dst = np.ones([rangeH, rangeW, D])
+
+	map_x, map_y = mapToOriginalImgPoints[:2].reshape((2,rangeH,rangeW)).round().astype(np.int)
+
+	dst = np.zeros([rangeH, rangeW, D])
+
+	for i in range(rangeH):
+		for j in range(rangeW):
+			indexX = map_x[i][j]
+			indexY = map_y[i][j]
+			if indexX > N-1 or indexY > M-1 or indexX < 0 or indexY < 0:
+				continue
+			value = img[indexY][indexX]
+			dst[i][j] = value
+
+	return dst
+
+def linearTransferImage1(img, h ,inverse):
+
+	height, weight, depth = img.shape
+	indY, indX = np.indices((height, weight))
+	rangeIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
+
+	rangePoints = h.dot(rangeIndex)
+	rangePoints /= rangePoints[2, :]
+	minX = np.min(rangePoints[0, :])
+	minY = np.min(rangePoints[1, :])
+	maxX = np.max(rangePoints[0, :])
+	maxY = np.max(rangePoints[1, :])
+
+
+
+	print('newrange', minX, minY,maxX,maxY)
+	rangeW = int(maxX - minX)
+	rangeH = int(maxY - minY)
+	print('newrange',rangeW,rangeH)
+
+	indY, indX = np.indices((rangeH, rangeW))
+	newPictureIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
+	newPictureIndex[0, :] += minX
+	newPictureIndex[1, :] += minY
+
+	mapToOriginalImgPoints = inverse.dot(newPictureIndex)
+	mapToOriginalImgPoints /= mapToOriginalImgPoints[2, :]
+
+	dst = np.ones([rangeH, rangeW, depth])
+	#
+	map_x = mapToOriginalImgPoints[0]
+	map_y = mapToOriginalImgPoints[1]
+	map_x = map_x.reshape(rangeH, rangeW).astype(np.int)
+	map_y = map_y.reshape(rangeH, rangeW).astype(np.int)
+
+	for i in range(rangeH):
+		for j in range(rangeW):
+			indexX = map_x[i][j]
+			indexY = map_y[i][j]
+			if indexX > weight-1 or indexY > height-1 or indexX < 0 or indexY < 0:
+				continue
+			value = img[indexY][indexX]
+			dst[i][j] = value
+
+	return dst
 
 
 if __name__ == "__main__":
