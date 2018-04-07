@@ -7,22 +7,17 @@ import os
 
 def up_to_step_1(imgs):
 	"""Complete pipeline up to step 3: Detecting features and descriptors"""
-	#output = set()
-	for i,img in enumerate(imgs):
-		gray= cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-		sift = cv2.xfeatures2d.SIFT_create()
-		kp,des = sift.detectAndCompute(gray,None)
-		img = cv2.drawKeypoints(gray,kp,img)
-		#output.add(img)
-		print(np.shape(des))
-		#cv2.imwrite(str(i) + '.jpg',img)
+
+	imgs,_ = detect(imgs)
 	return imgs
 
 
 def save_step_1(imgs, output_path='./output/step1'):
 	"""Save the intermediate result from Step 1"""
-	# ... your code here ...
-	pass
+
+	for i,img in enumerate(imgs):
+
+		cv2.imwrite(output_path + '/' + str(i) + '.jpg',img)
 
 
 def up_to_step_2(imgs):
@@ -75,7 +70,7 @@ def up_to_step_2(imgs):
 	Homo = None
 	for _ in range(100):
 		idx = np.random.randint(len(src_pts), size=8)
-		H = findHomography(src_pts[idx,:], dst_pts[idx,:])
+		H = findH(src_pts[idx,:], dst_pts[idx,:])
 		out = np.matmul(H,src_pts.transpose()).transpose()
 
 		error = np.sqrt((out[:,:2]/out[:,[-1]] - dst_pts)**2)
@@ -91,26 +86,13 @@ def up_to_step_2(imgs):
 
 	print(min_num)
 	dsize = m[0].shape
-	out = cv2.warpPerspective(m[0], H, dsize)
+	out = cv2.warpPerspective(m[0], H)
 	cv2.imwrite('warp2.jpg', out)
 	# print(H)
 	# cv2.imwrite('what1.jpg',img2)
 	return imgs, []
 
-def findHomography(src, dst):
 
-	A = []
-	for i in range(len(src)):
-		x1, y1 = src[i][0], src[i][1]
-		x2, y2 = dst[i][0], dst[i][1]
-		A.append([x1, y1, 1, 0, 0, 0, -x2*x1, -x2*y1, -x2])
-		A.append([0, 0, 0, x1, y1, 1, -y2*x1, -y2*y1, -y2])
-
-	U, S, Vh = np.linalg.svd(A)
-	L = Vh[-1,:] / Vh[-1,-1]
-	H = L.reshape(3, 3)
-
-	return H
 	# print(np.matmul(H,[1,1,1]))
 def save_step_2(imgs, match_list, output_path="./output/step2"):
 	"""Save the intermediate result from Step 2"""
@@ -143,6 +125,39 @@ def save_step_4(imgs, output_path="./output/step4"):
 	pass
 
 
+def findH(src, dst):
+
+	A = []
+	for i in range(len(src)):
+		x1, y1 = src[i][0], src[i][1]
+		x2, y2 = dst[i][0], dst[i][1]
+		A.append([x1, y1, 1, 0, 0, 0, -x2*x1, -x2*y1, -x2])
+		A.append([0, 0, 0, x1, y1, 1, -y2*x1, -y2*y1, -y2])
+
+	U, S, Vh = np.linalg.svd(A)
+	L = Vh[-1,:] / Vh[-1,-1]
+	H = L.reshape(3, 3)
+
+	return H
+
+def detect(imgs):
+	"""Complete pipeline up to step 3: Detecting features and descriptors"""
+
+	images = []
+	data = []
+	for i,img in enumerate(imgs):
+
+		gray= cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+		sift = cv2.xfeatures2d.SIFT_create(nfeatures=100)
+		kp,des = sift.detectAndCompute(gray,None)
+		img = cv2.drawKeypoints(img,kp,img,flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+		images.append(img)
+		data.append((i,img,kp,des))
+
+	return images, data
+
+
+
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
@@ -167,7 +182,9 @@ if __name__ == "__main__":
 	args = parser.parse_args()
 
 	imgs = []
-	for filename in os.listdir(args.input):
+	filelist = os.listdir(args.input)
+	filelist.sort()
+	for filename in filelist:
 		print(filename)
 		img = cv2.imread(os.path.join(args.input, filename))
 		imgs.append(img)
@@ -176,6 +193,7 @@ if __name__ == "__main__":
 		print("Running step 1")
 		modified_imgs = up_to_step_1(imgs)
 		save_step_1(imgs, args.output)
+
 	elif args.step == 2:
 		print("Running step 2")
 		modified_imgs, match_list = up_to_step_2(imgs)
