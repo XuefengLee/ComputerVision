@@ -22,12 +22,46 @@ def save_step_1(imgs, output_path='./output/step1'):
 
 def up_to_step_2(imgs):
 	"""Complete pipeline up to step 2: Calculate matching feature points"""
+	
+	imgs, data = detect(imgs)
+
+	images = []
+	length = len(data)
+	for i in range(length):
+		index,img,kp,des = data[i]
+		for j in range(i+1,length):
+			images.append(matching(data[j],data[i]))
+
+	return imgs, []
+
+
+def save_step_2(imgs, match_list, output_path="./output/step2"):
+	"""Save the intermediate result from Step 2"""
 	# ... your code here ...
+	pass
+
+def up_to_step_3(imgs):
+	imgs, data = detect(imgs)
+
+	images = []
+	length = len(data)
+	for train in range(length):
+		index,img,kp,des = data[train]
+		for query in range(train+1,length):
+			img, good = matching(data[query],data[train])
+			images.append(img)
+			H = ransac(good,data[query],data[train])
+
+			dsize = data[query][1].shape[0:2]
+			out = cv2.warpPerspective(data[query][1], H,dsize)
+			cv2.imwrite('warps/' + str(train) + str(query) + '.jpg', out)
+
+def up_to_step_3_copy(imgs):
 	images = []
 	for i,img in enumerate(imgs):
 		gray= cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-		sift = cv2.xfeatures2d.SIFT_create()
-		kp,des = sift.detectAndCompute(gray,None)
+		sift = cv2.xfeatures2d.SIFT_create(nfeatures=100)
+		kp,des = sift.detectAndCompute(img,None)
 		img = cv2.drawKeypoints(gray,kp,img)
 		images.append((gray,kp,des))
 
@@ -90,20 +124,7 @@ def up_to_step_2(imgs):
 	cv2.imwrite('warp2.jpg', out)
 	# print(H)
 	# cv2.imwrite('what1.jpg',img2)
-	return imgs, []
 
-
-	# print(np.matmul(H,[1,1,1]))
-def save_step_2(imgs, match_list, output_path="./output/step2"):
-	"""Save the intermediate result from Step 2"""
-	# ... your code here ...
-	pass
-
-
-def up_to_step_3(imgs):
-
-
-	findHomography(2,3)
 	return imgs
 
 
@@ -156,6 +177,56 @@ def detect(imgs):
 
 	return images, data
 
+def matching(query, train):
+
+	query_index, query_img, query_kp, query_des = query
+	train_index, train_img, train_kp, train_des = train
+
+
+	# compute Euclidean distance matrix
+	dists = np.sqrt(((query_des[:, :, None] - train_des[:, :, None].T) ** 2).sum(1))
+
+	matches = []
+
+	# get k nearest match point
+	for i in range(dists.shape[0]):
+		index = dists[i].argsort()[:2]
+		matches.append((cv2.DMatch(i, index[0], dists[i][index[0]]),cv2.DMatch(i, index[1], dists[i][index[1]])))
+
+
+
+	good = []
+	for a,b in matches:
+		if a.distance < 0.7*b.distance:
+			good.append(a)
+
+	img2 = cv2.drawMatches(query_img,query_kp,train_img,train_kp,good,None)
+
+	cv2.imwrite('matchings/' + str(train_index) + str(query_index) + '.jpg',img2)
+
+	return img2,good
+
+def ransac(good,query,train):
+
+	src_pts = np.float32([ np.append(query[2][v.queryIdx].pt,1) for v in good ])
+	dst_pts = np.float32([ train[2][v.trainIdx].pt for v in good ])
+
+	min_num = np.inf
+	Homo = None
+	for _ in range(100):
+		idx = np.random.randint(len(src_pts), size=8)
+		H = findH(src_pts[idx,:], dst_pts[idx,:])
+		out = np.matmul(H,src_pts.transpose()).transpose()
+
+		error = np.sqrt((out[:,:2]/out[:,[-1]] - dst_pts)**2)
+		error = np.where(error > 3, 1, 0)
+		num = np.sum(error)
+
+		if num < min_num:
+			min_num = num
+			Homo = H
+
+	return Homo
 
 
 if __name__ == "__main__":
