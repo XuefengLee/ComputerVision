@@ -56,76 +56,6 @@ def up_to_step_3(imgs):
 
 			cv2.imwrite('warps/' + str(train) + str(query) + '.jpg', Query)
 
-def up_to_step_3_copy(imgs):
-	images = []
-	for i,img in enumerate(imgs):
-		gray= cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-		sift = cv2.xfeatures2d.SIFT_create(nfeatures=100)
-		kp,des = sift.detectAndCompute(img,None)
-		img = cv2.drawKeypoints(gray,kp,img)
-		images.append((gray,kp,des))
-
-	images = images[::-1]
-	m,n = images[0],images[1]
-	mdes, ndes = m[2], n[2]
-
-
-	# compute Euclidean distance matrix
-	dists = np.sqrt(((mdes[:, :, None] - ndes[:, :, None].T) ** 2).sum(1))
-	matches = []
-
-	# get k nearest match point
-	for i in range(dists.shape[0]):
-		index = dists[i].argsort()[:2]
-		matches.append((cv2.DMatch(i, index[0], dists[i][index[0]])\
-			,cv2.DMatch(i, index[1], dists[i][index[1]])))
-
-
-
-	good = []
-	for a,b in matches:
-
-		if a.distance < 0.4*b.distance:
-			# print(str(a.distance) + ' ' + str(b.distance))
-
-			good.append(a)
-
-	img2 = cv2.drawMatches(m[0],m[1],n[0],n[1],good,None)
-
-	cv2.imwrite('what2.jpg',img2)
-
-	# Step 3
-	src_pts = np.float32([ np.append(m[1][v.queryIdx].pt,1) for v in good ])
-	dst_pts = np.float32([ n[1][v.trainIdx].pt for v in good ])
-
-
-
-	min_num = np.inf
-	Homo = None
-	for _ in range(100):
-		idx = np.random.randint(len(src_pts), size=8)
-		H = findH(src_pts[idx,:], dst_pts[idx,:])
-		out = np.matmul(H,src_pts.transpose()).transpose()
-
-		error = np.sqrt((out[:,:2]/out[:,[-1]] - dst_pts)**2)
-		print(np.sum(error,axis=1))
-		error = np.where(error > 3, 1, 0)
-		num = np.sum(error)
-
-		if num < min_num:
-			min_num = num
-			Homo = H
-
-
-
-	print(min_num)
-	dsize = m[0].shape
-	out = cv2.warpPerspective(m[0], H)
-	cv2.imwrite('warp2.jpg', out)
-	# print(H)
-	# cv2.imwrite('what1.jpg',img2)
-
-	return imgs
 
 
 def save_step_3(img_pairs, output_path="./output/step3"):
@@ -169,7 +99,7 @@ def detect(imgs):
 	for i,img in enumerate(imgs):
 
 		gray= cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-		sift = cv2.xfeatures2d.SIFT_create(nfeatures=100)
+		sift = cv2.xfeatures2d.SIFT_create(nfeatures=1000)
 		kp,des = sift.detectAndCompute(gray,None)
 		img = cv2.drawKeypoints(img,kp,img,flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 		images.append(img)
@@ -191,13 +121,18 @@ def matching(query, train):
 	# get k nearest match point
 	for i in range(dists.shape[0]):
 		index = dists[i].argsort()[:2]
+		index_2 = dists[:,index[0]].argsort()[0]
+
+		if index_2 != i:
+
+			continue
 		matches.append((cv2.DMatch(i, index[0], dists[i][index[0]]),cv2.DMatch(i, index[1], dists[i][index[1]])))
 
 
 
 	good = []
 	for a,b in matches:
-		if a.distance < 0.7*b.distance:
+		if a.distance < 0.6*b.distance:
 			good.append(a)
 
 	img2 = cv2.drawMatches(query_img,query_kp,train_img,train_kp,good,None)
@@ -213,7 +148,7 @@ def ransac(good,query,train):
 
 	min_num = np.inf
 	Homo = None
-	for _ in range(100):
+	for _ in range(1000):
 		idx = np.random.randint(len(src_pts), size=8)
 		H = findH(src_pts[idx,:], dst_pts[idx,:])
 		out = np.matmul(H,src_pts.transpose()).transpose()
@@ -228,62 +163,6 @@ def ransac(good,query,train):
 
 	return Homo
 
-def linearTransferImage(img, h ,inverse):
-
-	height, width, depth = img.shape
-
-	coordinate = np.append(np.mgrid[0:width, 0:height].reshape((2, width*height)),[np.ones(height*width)],axis=0)
-
-
-	coordinate = h.dot(coordinate)
-	coordinate /= coordinate[2, :]
-	minX = np.min(coordinate[0, :])
-	maxX = np.max(coordinate[0, :])
-	minY = np.min(coordinate[1, :])
-	maxY = np.max(coordinate[1, :])
-
-	print('newrange', minX, minY,maxX,maxY)
-	rangeW = int(maxX - minX)
-	rangeH = int(maxY - minY)
-
-	# indY, indX = np.indices((rangeH, rangeW))
-	# newPictureIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
-
-
-	# newPictureIndex = np.append(np.mgrid[0:rangeW, 0:rangeH].reshape((2, rangeW*rangeH)),[np.ones(rangeW*rangeH)],axis=0)
-	# print(newPictureIndex.shape)
-	indY, indX = np.indices((rangeH, rangeW))
-	newPictureIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
-	print(newPictureIndex.shape)
-
-	newPictureIndex[0, :] += minX
-	newPictureIndex[1, :] += minY
-
-	mapToOriginalImgPoints = inverse.dot(newPictureIndex)
-	mapToOriginalImgPoints /= mapToOriginalImgPoints[2, :]
-
-	dst = np.ones([rangeH, rangeW, depth])
-	#
-	map_x = mapToOriginalImgPoints[0]
-	map_y = mapToOriginalImgPoints[1]
-
-	map_x = map_x.reshape(rangeH, rangeW).astype(np.int)
-	map_y = map_y.reshape(rangeH, rangeW).astype(np.int)
-
-	# for i in range(rangeH):
-	# 	for j in range(rangeW):
-	# 		indexX = map_x[i][j]
-	# 		indexY = map_y[i][j]
-	# 		if indexX > width-1 or indexY > height-1 or indexX < 0 or indexY < 0:
-	# 			continue
-	# 		value = img[indexY][indexX]
-	# 		dst[i][j] = value
-	# return None
-
-	# np.take(, indices, mode='wrap')
-
-
-	return dst
 
 def linear_transformation(img, a):
 
@@ -327,51 +206,7 @@ def linear_transformation(img, a):
 
 	return dst
 
-def linearTransferImage1(img, h ,inverse):
 
-	height, weight, depth = img.shape
-	indY, indX = np.indices((height, weight))
-	rangeIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
-
-	rangePoints = h.dot(rangeIndex)
-	rangePoints /= rangePoints[2, :]
-	minX = np.min(rangePoints[0, :])
-	minY = np.min(rangePoints[1, :])
-	maxX = np.max(rangePoints[0, :])
-	maxY = np.max(rangePoints[1, :])
-
-
-
-	print('newrange', minX, minY,maxX,maxY)
-	rangeW = int(maxX - minX)
-	rangeH = int(maxY - minY)
-	print('newrange',rangeW,rangeH)
-
-	indY, indX = np.indices((rangeH, rangeW))
-	newPictureIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
-	newPictureIndex[0, :] += minX
-	newPictureIndex[1, :] += minY
-
-	mapToOriginalImgPoints = inverse.dot(newPictureIndex)
-	mapToOriginalImgPoints /= mapToOriginalImgPoints[2, :]
-
-	dst = np.ones([rangeH, rangeW, depth])
-	#
-	map_x = mapToOriginalImgPoints[0]
-	map_y = mapToOriginalImgPoints[1]
-	map_x = map_x.reshape(rangeH, rangeW).astype(np.int)
-	map_y = map_y.reshape(rangeH, rangeW).astype(np.int)
-
-	for i in range(rangeH):
-		for j in range(rangeW):
-			indexX = map_x[i][j]
-			indexY = map_y[i][j]
-			if indexX > weight-1 or indexY > height-1 or indexX < 0 or indexY < 0:
-				continue
-			value = img[indexY][indexX]
-			dst[i][j] = value
-
-	return dst
 
 
 if __name__ == "__main__":
