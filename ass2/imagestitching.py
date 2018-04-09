@@ -28,41 +28,47 @@ def up_to_step_2(imgs):
 	images = []
 	length = len(data)
 	for i in range(length):
-		filename, img, kp, des = data[i]
 		for j in range(i+1,length):
 			images.append(matching(data[j], data[i]))
 
+	return images
 
-	return imgs, []
 
-
-def save_step_2(imgs, match_list, output_path="./output/step2"):
+def save_step_2(imgs,  output_path="./output/step2"):
 	"""Save the intermediate result from Step 2"""
-	# ... your code here ...
-	pass
+	for img in imgs:
+		cv2.imwrite(output_path+'/'+img[0]+'.jpg', img[1])
 
 def up_to_step_3(imgs):
-	imgs, data = detect(imgs)
 
+	data = detect(imgs)
 	images = []
 	length = len(data)
+
 	for train in range(length):
-		index,img,kp,des = data[train]
+		# index,img,kp,des = data[train]
 		for query in range(train+1,length):
-			img, good = matching(data[query],data[train])
-			images.append(img)
+			_, img, good = matching(data[query],data[train])
+			# images.append(img)
 			H = ransac(good,data[query],data[train])
 
-			Query = linear_transformation(data[query][1], H)
+			Warp = linear_transformation(data[query][1], H)
+			filename1 = data[query][0] + '_warp_' + data[train][0] + '_ref'
 
-			cv2.imwrite('warps/' + str(train) + str(query) + '.jpg', Query)
+			inv = np.linalg.inv(H)
+			Ref = linear_transformation(data[train][1], inv)
+			filename2 = data[train][0] + '_warp_' + data[query][0] + '_ref'
 
+			images.append(((filename1,Warp),(filename2,Ref)))
 
+	return images
 
 def save_step_3(img_pairs, output_path="./output/step3"):
 	"""Save the intermediate result from Step 3"""
-	# ... your code here ...
-	pass
+
+	for pair in img_pairs:
+		cv2.imwrite(output_path+'/'+ pair[0][0]+'.jpg', pair[0][1])
+		cv2.imwrite(output_path+'/'+ pair[1][0]+'.jpg', pair[1][1])
 
 
 def up_to_step_4(imgs):
@@ -99,7 +105,7 @@ def detect(imgs):
 
 	for filename,img in imgs:
 		gray= cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-		sift = cv2.xfeatures2d.SIFT_create()
+		sift = cv2.xfeatures2d.SIFT_create(nfeatures=100)
 		kp,des = sift.detectAndCompute(gray,None)
 		img = cv2.drawKeypoints(img,kp,img,flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 		data.append((filename,img,kp,des))
@@ -108,8 +114,8 @@ def detect(imgs):
 
 def matching(query, train):
 
-	query_index, query_img, query_kp, query_des = query
-	train_index, train_img, train_kp, train_des = train
+	query_name, query_img, query_kp, query_des = query
+	train_name, train_img, train_kp, train_des = train
 
 
 	# compute Euclidean distance matrix
@@ -132,33 +138,36 @@ def matching(query, train):
 
 	good = []
 	for a,b in matches:
-		if a.distance < 0.6 * b.distance:
+		if a.distance < 0.7 * b.distance:
 			good.append(a)
 
-	img2 = cv2.drawMatches(train_img,train_kp,query_img,query_kp,good,None)
+	img = cv2.drawMatches(train_img,train_kp,query_img,query_kp,good,None)
 
-	cv2.imwrite('matchings/' + str(train_index) + str(query_index) + '.jpg',img2)
+	filename = train_name+'_'+str(len(train_kp))+'_'+query_name+'_'+str(len(query_kp))+'_'+str(len(good))
 
-	return img2,good
+	return (filename, img, good)
 
 def ransac(good,query,train):
 
-	src_pts = np.float32([ np.append(query[2][v.queryIdx].pt,1) for v in good ])
-	dst_pts = np.float32([ train[2][v.trainIdx].pt for v in good ])
+	src_pts = np.float32([ np.append(train[2][v.queryIdx].pt,1) for v in good ])
+	dst_pts = np.float32([ query[2][v.trainIdx].pt for v in good ])
 
-	min_num = np.inf
+	max_num = 0
 	Homo = None
-	for _ in range(1000):
-		idx = np.random.randint(len(src_pts), size=8)
+	for _ in range(100):
+		idx = np.random.randint(len(src_pts), size=4)
 		H = findH(src_pts[idx,:], dst_pts[idx,:])
+
 		out = np.matmul(H,src_pts.transpose()).transpose()
 
-		error = np.sqrt((out[:,:2]/out[:,[-1]] - dst_pts)**2)
-		error = np.where(error > 3, 1, 0)
-		num = np.sum(error)
+		inlier = np.sqrt((out[:,:2]/out[:,[-1]] - dst_pts)**2)
+		inlier = np.where(inlier < 3, 1, 0)
+		num = np.sum(inlier)
 
-		if num < min_num:
-			min_num = num
+		# out = np.linalg.inv(H).dot(dst_pts)
+
+		if num > max_num:
+			max_num = num
 			Homo = H
 
 	return Homo
@@ -172,6 +181,8 @@ def linear_transformation(img, a):
 	affine_points = a.dot(points)
 	affine_points /= affine_points[2, :]
 
+
+	# find range of the new image
 	minX = np.min(affine_points[0, :])
 	minY = np.min(affine_points[1, :])
 	maxX = np.max(affine_points[0, :])
