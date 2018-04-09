@@ -8,29 +8,30 @@ import os
 def up_to_step_1(imgs):
 	"""Complete pipeline up to step 3: Detecting features and descriptors"""
 
-	imgs,_ = detect(imgs)
+	imgs = detect(imgs)
 	return imgs
 
 
 def save_step_1(imgs, output_path='./output/step1'):
 	"""Save the intermediate result from Step 1"""
 
-	for i,img in enumerate(imgs):
+	for filename,img,_,_ in imgs:
 
-		cv2.imwrite(output_path + '/' + str(i) + '.jpg',img)
+		cv2.imwrite(output_path + '/' + filename + '.jpg',img)
 
 
 def up_to_step_2(imgs):
 	"""Complete pipeline up to step 2: Calculate matching feature points"""
 	
-	imgs, data = detect(imgs)
+	data = detect(imgs)
 
 	images = []
 	length = len(data)
 	for i in range(length):
-		index,img,kp,des = data[i]
+		filename, img, kp, des = data[i]
 		for j in range(i+1,length):
-			images.append(matching(data[j],data[i]))
+			images.append(matching(data[j], data[i]))
+
 
 	return imgs, []
 
@@ -94,18 +95,16 @@ def findH(src, dst):
 def detect(imgs):
 	"""Complete pipeline up to step 3: Detecting features and descriptors"""
 
-	images = []
 	data = []
-	for i,img in enumerate(imgs):
 
+	for filename,img in imgs:
 		gray= cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-		sift = cv2.xfeatures2d.SIFT_create(nfeatures=1000)
+		sift = cv2.xfeatures2d.SIFT_create()
 		kp,des = sift.detectAndCompute(gray,None)
 		img = cv2.drawKeypoints(img,kp,img,flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-		images.append(img)
-		data.append((i,img,kp,des))
+		data.append((filename,img,kp,des))
 
-	return images, data
+	return data
 
 def matching(query, train):
 
@@ -121,21 +120,22 @@ def matching(query, train):
 	# get k nearest match point
 	for i in range(dists.shape[0]):
 		index = dists[i].argsort()[:2]
+
+		# throw non-symmetry nearest relation
 		index_2 = dists[:,index[0]].argsort()[0]
-
 		if index_2 != i:
-
 			continue
-		matches.append((cv2.DMatch(i, index[0], dists[i][index[0]]),cv2.DMatch(i, index[1], dists[i][index[1]])))
+
+		matches.append((cv2.DMatch(index[0], i,dists[i][index[0]]),cv2.DMatch(index[1], i,dists[i][index[1]])))
 
 
 
 	good = []
 	for a,b in matches:
-		if a.distance < 0.6*b.distance:
+		if a.distance < 0.6 * b.distance:
 			good.append(a)
 
-	img2 = cv2.drawMatches(query_img,query_kp,train_img,train_kp,good,None)
+	img2 = cv2.drawMatches(train_img,train_kp,query_img,query_kp,good,None)
 
 	cv2.imwrite('matchings/' + str(train_index) + str(query_index) + '.jpg',img2)
 
@@ -238,17 +238,16 @@ if __name__ == "__main__":
 	for filename in filelist:
 		print(filename)
 		img = cv2.imread(os.path.join(args.input, filename))
-		imgs.append(img)
+		imgs.append((os.path.splitext(filename)[0],img))
 
 	if args.step == 1:
 		print("Running step 1")
 		modified_imgs = up_to_step_1(imgs)
-		save_step_1(imgs, args.output)
-
+		save_step_1(modified_imgs, args.output)
 	elif args.step == 2:
 		print("Running step 2")
-		modified_imgs, match_list = up_to_step_2(imgs)
-		save_step_2(modified_imgs, match_list, args.output)
+		modified_imgs = up_to_step_2(imgs)
+		save_step_2(modified_imgs, args.output)
 	elif args.step == 3:
 		print("Running step 3")
 		img_pairs = up_to_step_3(imgs)
@@ -256,4 +255,5 @@ if __name__ == "__main__":
 	elif args.step == 4:
 		print("Running step 4")
 		panoramic_img = up_to_step_4(imgs)
-		save_step_4(img_pairs, args.output)
+		save_step_4(panoramic_img, args.output)
+
