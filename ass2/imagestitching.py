@@ -73,7 +73,14 @@ def save_step_3(img_pairs, output_path="./output/step3"):
 
 def up_to_step_4(imgs):
 	"""Complete the pipeline and generate a panoramic image"""
-	# ... your code here ...
+	data = detect(imgs)
+	length = len(data)
+
+	for train in range(length - 1):
+		query = train + 1
+
+		_, img, good = matching(data[query])
+
 	return imgs[0]
 
 
@@ -132,7 +139,7 @@ def matching(query, train):
 		if index_2 != i:
 			continue
 
-		matches.append((cv2.DMatch(index[0], i,dists[i][index[0]]),cv2.DMatch(index[1], i,dists[i][index[1]])))
+		matches.append((cv2.DMatch(i, index[0], dists[i][index[0]]),cv2.DMatch(i, index[1], dists[i][index[1]])))
 
 
 
@@ -141,7 +148,7 @@ def matching(query, train):
 		if a.distance < 0.7 * b.distance:
 			good.append(a)
 
-	img = cv2.drawMatches(train_img,train_kp,query_img,query_kp,good,None)
+	img = cv2.drawMatches(query_img,query_kp,train_img,train_kp,good,None)
 
 	filename = train_name+'_'+str(len(train_kp))+'_'+query_name+'_'+str(len(query_kp))+'_'+str(len(good))
 
