@@ -76,12 +76,21 @@ def up_to_step_4(imgs):
 	data = detect(imgs)
 	length = len(data)
 
-	for train in range(length - 1):
-		query = train + 1
+	info = []
+	# for train in range(length - 1):
+	# 	query = train + 1
 
-		_, img, good = matching(data[query])
-
-	return imgs[0]
+	_, img, good = matching(data[0],data[1])
+	H = ransac(good,data[0],data[1])
+	info.append((H,img))
+	_, img, good = matching(data[0],data[1])
+	info.append((np.eye(3),data[1][1]))
+	
+	_, img, good = matching(data[2],data[1])
+	H = ransac(good,data[2],data[1])
+	info.append((H,img))
+	constructImages(info)
+	# return imgs[0]
 
 
 def save_step_4(imgs, output_path="./output/step4"):
@@ -100,7 +109,8 @@ def findH(src, dst):
 		A.append([0, 0, 0, x1, y1, 1, -y2*x1, -y2*y1, -y2])
 
 	U, S, Vh = np.linalg.svd(A)
-	L = Vh[-1,:] / Vh[-1,-1]
+	# L = Vh[-1,:] / Vh[-1,-1]
+	L = Vh[-1,:]
 	H = L.reshape(3, 3)
 
 	return H
@@ -156,8 +166,8 @@ def matching(query, train):
 
 def ransac(good,query,train):
 
-	src_pts = np.float32([ np.append(train[2][v.queryIdx].pt,1) for v in good ])
-	dst_pts = np.float32([ query[2][v.trainIdx].pt for v in good ])
+	src_pts = np.float32([ np.append(query[2][v.queryIdx].pt,1) for v in good ])
+	dst_pts = np.float32([ train[2][v.trainIdx].pt for v in good ])
 
 	max_num = 0
 	Homo = None
@@ -224,7 +234,67 @@ def linear_transformation(img, a):
 
 	return dst
 
+def findImageBorder(data):
 
+    minXs = []
+    minYs = []
+    maxXs = []
+    maxYs = []
+    for H, img in data:
+    	# print(img)
+        height,width,depth = img.shape
+        indY, indX = np.indices((height, width))
+        rangeIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
+
+        rangePoints = H.dot(rangeIndex)
+        rangePoints /= rangePoints[2, :]
+        minX = np.min(rangePoints[0, :])
+        minY = np.min(rangePoints[1, :])
+        maxX = np.max(rangePoints[0, :])
+        maxY = np.max(rangePoints[1, :])
+        minXs.append(minX)
+        minYs.append(minY)
+        maxXs.append(maxX)
+        maxYs.append(maxY)
+
+    return min(minXs), min(minYs), max(maxXs), max(maxYs)
+
+def constructImages(data):
+    minX, minY, maxX, maxY = findImageBorder(data)
+
+    rangeW = int(maxX - minX)
+    rangeH = int(maxY - minY)
+
+    indY, indX = np.indices((rangeH, rangeW))
+    newPictureIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
+    newPictureIndex[0, :] += minX
+    newPictureIndex[1, :] += minY
+
+    dst = np.ones([rangeH, rangeW, 3])
+
+    for H, img in data:
+        
+        currHeight, currWidth, depth = img.shape
+        print(H)
+        inverse = np.linalg.inv(H)
+        mapToOriginalImgPoints = inverse.dot(newPictureIndex)
+
+        mapToOriginalImgPoints /= mapToOriginalImgPoints[2, :]
+
+        map_x = mapToOriginalImgPoints[0]
+        map_y = mapToOriginalImgPoints[1]
+        map_x = map_x.reshape(rangeH, rangeW).astype(np.int)
+        map_y = map_y.reshape(rangeH, rangeW).astype(np.int)
+
+        for i in range(rangeH):
+            for j in range(rangeW):
+                indexX = map_x[i][j]
+                indexY = map_y[i][j]
+                if indexX > currWidth - 1 or indexY > currHeight - 1 or indexX < 0 or indexY < 0:
+                    continue
+                value = img[indexY][indexX]
+                dst[i][j] = value
+    cv2.imwrite("step4.jpg",dst)
 
 
 if __name__ == "__main__":
