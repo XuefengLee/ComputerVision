@@ -82,21 +82,37 @@ def up_to_step_4(imgs):
 	"""Complete the pipeline and generate a panoramic image"""
 	data = detect_for_step_4(imgs)
 	length = len(data)
-
-# <<<<<<< Updated upstream
 	info = []
-	# for train in range(length - 1):
-	# 	query = train + 1
+	match_matrix = np.zeros((length,length))
+	Homo_matrix = [[None for x in range(length)] for y in range(length)] 
 
-	_, img, good = matching(data[0],data[1])
-	H = ransac(good,data[0],data[1])
-	info.append((H,data[0][1]))
-	# _, img, good = matching(data[0],data[1])
-	info.append((np.eye(3),data[1][1]))
-	
-	_, img, good = matching(data[2],data[1])
-	H = ransac(good,data[2],data[1])
-	info.append((H,data[2][1]))
+	for i in range(length):
+			for j in range(i+1,length):
+				_, img, good = matching(data[j],data[i])
+				
+				if len(good) < 10:
+					continue
+
+				match_matrix[i,j] = len(good)
+				match_matrix[j,i] = len(good)
+
+				H = ransac(good,data[j],data[i])
+
+				Homo_matrix[j][i] = H
+				Homo_matrix[i][j] = np.linalg.inv(H)
+
+
+	centre = np.argmax(np.median(match_matrix,axis=1))
+
+	# print(centre)
+	info.append((np.eye(3),data[centre][1]))
+
+	for i in range(length):
+		if i == centre:
+			continue
+		info.append((Homo_matrix[i][centre],data[i][1]))
+
+
 	constructImages(info)
 
 	return
@@ -309,7 +325,7 @@ def constructImages(data):
 				dst[i][j] = value
 		# dst = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
 	dst = cylindrical(dst)
-	cv2.imwrite("step4_non.jpg",dst)
+	cv2.imwrite("step4444.jpg",dst)
 
 def cylindrical(img):
 	height,width,depth = img.shape
