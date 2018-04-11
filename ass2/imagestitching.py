@@ -99,15 +99,8 @@ def up_to_step_4(imgs):
 	H = ransac(good,data[2],data[1])
 	info.append((H,img))
 	constructImages(info)
-	# return imgs[0]
-# =======
-# 	for train in range(length - 1):
-# 		query = train + 1
 
-# 		_, img, good = matching(data[query])
-
-	# return imgs[0]
-
+	return
 
 def save_step_4(imgs, output_path="./output/step4"):
 	"""Save the intermediate result from Step 4"""
@@ -227,14 +220,13 @@ def linear_transformation(img, a):
 	rangeH = int(maxY - minY)
 
 	indY, indX = np.indices((rangeH, rangeW))
-	newPictureIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
-	newPictureIndex[0, :] += minX
-	newPictureIndex[1, :] += minY
+	maps = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
+	maps[0, :] += minX
+	maps[1, :] += minY
 
-	maps = np.linalg.inv(a).dot(newPictureIndex)
+	maps = np.linalg.inv(a).dot(maps)
 
 	map_x, map_y = maps[:-1]/maps[-1]
-	# dst = np.ones([rangeH, rangeW, D])
 
 	map_x = map_x.reshape(rangeH, rangeW).astype(np.float32)
 	map_y = map_y.reshape(rangeH, rangeW).astype(np.float32)
@@ -274,8 +266,7 @@ def constructImages(data):
 
 	rangeW = int(maxX - minX)
 	rangeH = int(maxY - minY)
-	# print("rangeW: ", rangeW)
-	# print("rangeH ", rangeH)
+
 	indY, indX = np.indices((rangeH, rangeW))
 	newPictureIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
 	newPictureIndex[0, :] += minX
