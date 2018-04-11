@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import argparse
 import os
+import math
 
 
 def up_to_step_1(imgs):
@@ -51,10 +52,8 @@ def up_to_step_3(imgs):
 	length = len(data)
 
 	for train in range(length):
-		# index,img,kp,des = data[train]
 		for query in range(train+1,length):
 			_, img, good = matching(data[query],data[train])
-			# images.append(img)
 
 			if (len(good)) < 10:
 				continue
@@ -81,7 +80,7 @@ def save_step_3(img_pairs, output_path="./output/step3"):
 
 def up_to_step_4(imgs):
 	"""Complete the pipeline and generate a panoramic image"""
-	data = detect(imgs)
+	data = detect_for_step_4(imgs)
 	length = len(data)
 
 # <<<<<<< Updated upstream
@@ -91,13 +90,13 @@ def up_to_step_4(imgs):
 
 	_, img, good = matching(data[0],data[1])
 	H = ransac(good,data[0],data[1])
-	info.append((H,img))
-	_, img, good = matching(data[0],data[1])
+	info.append((H,data[0][1]))
+	# _, img, good = matching(data[0],data[1])
 	info.append((np.eye(3),data[1][1]))
 	
 	_, img, good = matching(data[2],data[1])
 	H = ransac(good,data[2],data[1])
-	info.append((H,img))
+	info.append((H,data[2][1]))
 	constructImages(info)
 
 	return
@@ -135,6 +134,17 @@ def detect(imgs):
 		sift = cv2.xfeatures2d.SIFT_create(nfeatures=200)
 		kp,des = sift.detectAndCompute(gray,None)
 		img = cv2.drawKeypoints(img,kp,img,flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+		data.append((filename,img,kp,des))
+
+	return data
+
+def detect_for_step_4(imgs):
+	data = []
+	for filename,img in imgs:
+		gray= cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+		sift = cv2.xfeatures2d.SIFT_create(nfeatures=200)
+		kp,des = sift.detectAndCompute(gray,None)
+		# img = cv2.drawKeypoints(img,kp,img,flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 		data.append((filename,img,kp,des))
 
 	return data
@@ -243,7 +253,6 @@ def findImageBorder(data):
 	maxXs = []
 	maxYs = []
 	for H, img in data:
-		# print(img)
 		height,width,depth = img.shape
 		indY, indX = np.indices((height, width))
 		rangeIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
@@ -275,12 +284,14 @@ def constructImages(data):
 	dst = np.ones([rangeH, rangeW, 3])
 
 	for H, img in data:
-		
-		currHeight, currWidth, depth = img.shape
 		print(H)
+		currHeight, currWidth, depth = img.shape
 		inverse = np.linalg.inv(H)
 		maps = inverse.dot(newPictureIndex)
+		map_x, map_y = maps[:-1]/maps[-1]
 
+		# map_x = map_x.reshape(rangeH, rangeW).astype(np.float32)
+		# map_y = map_y.reshape(rangeH, rangeW).astype(np.float32)
 		maps /= maps[2, :]
 
 		map_x = maps[0]
@@ -296,9 +307,28 @@ def constructImages(data):
 					continue
 				value = img[indexY][indexX]
 				dst[i][j] = value
-	cv2.imwrite("step4.jpg",dst)
+		# dst = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
+	dst = cylindrical(dst)
+	cv2.imwrite("step4_non.jpg",dst)
+
+def cylindrical(img):
+	height,width,depth = img.shape
+	A = np.zeros(img.shape)
+	centerX = int(width / 2)
+	centerY = int(height / 2)
+	alpha = math.pi / 4
+	f = width / (2 * math.tan(math.pi/4/2));
+	for i in range(width):
+		for j in range(height):
+			theta = math.asin((i - centerX) / f);
+			pointX = int(f * math.tan((i - centerX) / f) + centerX)
+			pointY = int((j - centerY) / math.cos(theta) + centerY)
+			
+			if pointX >= 0 and pointX < width and pointY >= 0 and pointY < height:
+				A[j][i] = img[pointY][pointX];
 
 
+	return A
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
