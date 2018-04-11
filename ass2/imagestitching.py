@@ -15,6 +15,9 @@ def up_to_step_1(imgs):
 def save_step_1(imgs, output_path='./output/step1'):
 	"""Save the intermediate result from Step 1"""
 
+	if not os.path.exists(output_path):
+		os.makedirs(output_path)
+
 	for filename,img,_,_ in imgs:
 
 		cv2.imwrite(output_path + '/' + filename + '.jpg',img)
@@ -36,6 +39,8 @@ def up_to_step_2(imgs):
 
 def save_step_2(imgs,  output_path="./output/step2"):
 	"""Save the intermediate result from Step 2"""
+	if not os.path.exists(output_path):
+		os.makedirs(output_path)
 	for img in imgs:
 		cv2.imwrite(output_path+'/'+img[0]+'.jpg', img[1])
 
@@ -50,8 +55,10 @@ def up_to_step_3(imgs):
 		for query in range(train+1,length):
 			_, img, good = matching(data[query],data[train])
 			# images.append(img)
-			H = ransac(good,data[query],data[train])
 
+			if (len(good)) < 10:
+				continue
+			H = ransac(good,data[query],data[train])
 			Warp = linear_transformation(data[query][1], H)
 			filename1 = data[query][0] + '_warp_' + data[train][0] + '_ref'
 
@@ -65,7 +72,8 @@ def up_to_step_3(imgs):
 
 def save_step_3(img_pairs, output_path="./output/step3"):
 	"""Save the intermediate result from Step 3"""
-
+	if not os.path.exists(output_path):
+		os.makedirs(output_path)
 	for pair in img_pairs:
 		cv2.imwrite(output_path+'/'+ pair[0][0]+'.jpg', pair[0][1])
 		cv2.imwrite(output_path+'/'+ pair[1][0]+'.jpg', pair[1][1])
@@ -76,6 +84,7 @@ def up_to_step_4(imgs):
 	data = detect(imgs)
 	length = len(data)
 
+# <<<<<<< Updated upstream
 	info = []
 	# for train in range(length - 1):
 	# 	query = train + 1
@@ -91,11 +100,20 @@ def up_to_step_4(imgs):
 	info.append((H,img))
 	constructImages(info)
 	# return imgs[0]
+# =======
+# 	for train in range(length - 1):
+# 		query = train + 1
+
+# 		_, img, good = matching(data[query])
+
+	# return imgs[0]
 
 
 def save_step_4(imgs, output_path="./output/step4"):
 	"""Save the intermediate result from Step 4"""
 	# ... your code here ...
+	if not os.path.exists(output_path):
+		os.makedirs(output_path)
 	pass
 
 
@@ -109,7 +127,7 @@ def findH(src, dst):
 		A.append([0, 0, 0, x1, y1, 1, -y2*x1, -y2*y1, -y2])
 
 	U, S, Vh = np.linalg.svd(A)
-	# L = Vh[-1,:] / Vh[-1,-1]
+	L = Vh[-1,:] / Vh[-1,-1]
 	L = Vh[-1,:]
 	H = L.reshape(3, 3)
 
@@ -119,10 +137,9 @@ def detect(imgs):
 	"""Complete pipeline up to step 3: Detecting features and descriptors"""
 
 	data = []
-
 	for filename,img in imgs:
 		gray= cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-		sift = cv2.xfeatures2d.SIFT_create(nfeatures=100)
+		sift = cv2.xfeatures2d.SIFT_create(nfeatures=200)
 		kp,des = sift.detectAndCompute(gray,None)
 		img = cv2.drawKeypoints(img,kp,img,flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 		data.append((filename,img,kp,des))
@@ -171,7 +188,8 @@ def ransac(good,query,train):
 
 	max_num = 0
 	Homo = None
-	for _ in range(100):
+
+	for _ in range(1000):
 		idx = np.random.randint(len(src_pts), size=4)
 		H = findH(src_pts[idx,:], dst_pts[idx,:])
 
@@ -186,8 +204,8 @@ def ransac(good,query,train):
 		if num > max_num:
 			max_num = num
 			Homo = H
-
 	return Homo
+
 
 
 def linear_transformation(img, a):
@@ -213,88 +231,81 @@ def linear_transformation(img, a):
 	newPictureIndex[0, :] += minX
 	newPictureIndex[1, :] += minY
 
-	mapToOriginalImgPoints = np.linalg.inv(a).dot(newPictureIndex)
+	maps = np.linalg.inv(a).dot(newPictureIndex)
 
-	mapToOriginalImgPoints /= mapToOriginalImgPoints[2, :]
+	map_x, map_y = maps[:-1]/maps[-1]
+	# dst = np.ones([rangeH, rangeW, D])
 
-	dst = np.ones([rangeH, rangeW, D])
+	map_x = map_x.reshape(rangeH, rangeW).astype(np.float32)
+	map_y = map_y.reshape(rangeH, rangeW).astype(np.float32)
 
-	map_x, map_y = mapToOriginalImgPoints[:2].reshape((2,rangeH,rangeW)).round().astype(np.int)
 
-	dst = np.zeros([rangeH, rangeW, D])
-
-	for i in range(rangeH):
-		for j in range(rangeW):
-			indexX = map_x[i][j]
-			indexY = map_y[i][j]
-			if indexX > N-1 or indexY > M-1 or indexX < 0 or indexY < 0:
-				continue
-			value = img[indexY][indexX]
-			dst[i][j] = value
+	dst = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
 
 	return dst
 
 def findImageBorder(data):
 
-    minXs = []
-    minYs = []
-    maxXs = []
-    maxYs = []
-    for H, img in data:
-    	# print(img)
-        height,width,depth = img.shape
-        indY, indX = np.indices((height, width))
-        rangeIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
+	minXs = []
+	minYs = []
+	maxXs = []
+	maxYs = []
+	for H, img in data:
+		# print(img)
+		height,width,depth = img.shape
+		indY, indX = np.indices((height, width))
+		rangeIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
 
-        rangePoints = H.dot(rangeIndex)
-        rangePoints /= rangePoints[2, :]
-        minX = np.min(rangePoints[0, :])
-        minY = np.min(rangePoints[1, :])
-        maxX = np.max(rangePoints[0, :])
-        maxY = np.max(rangePoints[1, :])
-        minXs.append(minX)
-        minYs.append(minY)
-        maxXs.append(maxX)
-        maxYs.append(maxY)
+		rangePoints = H.dot(rangeIndex)
+		rangePoints /= rangePoints[2, :]
+		minX = np.min(rangePoints[0, :])
+		minY = np.min(rangePoints[1, :])
+		maxX = np.max(rangePoints[0, :])
+		maxY = np.max(rangePoints[1, :])
+		minXs.append(minX)
+		minYs.append(minY)
+		maxXs.append(maxX)
+		maxYs.append(maxY)
 
-    return min(minXs), min(minYs), max(maxXs), max(maxYs)
+	return min(minXs), min(minYs), max(maxXs), max(maxYs)
 
 def constructImages(data):
-    minX, minY, maxX, maxY = findImageBorder(data)
+	minX, minY, maxX, maxY = findImageBorder(data)
 
-    rangeW = int(maxX - minX)
-    rangeH = int(maxY - minY)
+	rangeW = int(maxX - minX)
+	rangeH = int(maxY - minY)
+	# print("rangeW: ", rangeW)
+	# print("rangeH ", rangeH)
+	indY, indX = np.indices((rangeH, rangeW))
+	newPictureIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
+	newPictureIndex[0, :] += minX
+	newPictureIndex[1, :] += minY
 
-    indY, indX = np.indices((rangeH, rangeW))
-    newPictureIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
-    newPictureIndex[0, :] += minX
-    newPictureIndex[1, :] += minY
+	dst = np.ones([rangeH, rangeW, 3])
 
-    dst = np.ones([rangeH, rangeW, 3])
+	for H, img in data:
+		
+		currHeight, currWidth, depth = img.shape
+		print(H)
+		inverse = np.linalg.inv(H)
+		maps = inverse.dot(newPictureIndex)
 
-    for H, img in data:
-        
-        currHeight, currWidth, depth = img.shape
-        print(H)
-        inverse = np.linalg.inv(H)
-        mapToOriginalImgPoints = inverse.dot(newPictureIndex)
+		maps /= maps[2, :]
 
-        mapToOriginalImgPoints /= mapToOriginalImgPoints[2, :]
+		map_x = maps[0]
+		map_y = maps[1]
+		map_x = map_x.reshape(rangeH, rangeW).astype(np.int)
+		map_y = map_y.reshape(rangeH, rangeW).astype(np.int)
 
-        map_x = mapToOriginalImgPoints[0]
-        map_y = mapToOriginalImgPoints[1]
-        map_x = map_x.reshape(rangeH, rangeW).astype(np.int)
-        map_y = map_y.reshape(rangeH, rangeW).astype(np.int)
-
-        for i in range(rangeH):
-            for j in range(rangeW):
-                indexX = map_x[i][j]
-                indexY = map_y[i][j]
-                if indexX > currWidth - 1 or indexY > currHeight - 1 or indexX < 0 or indexY < 0:
-                    continue
-                value = img[indexY][indexX]
-                dst[i][j] = value
-    cv2.imwrite("step4.jpg",dst)
+		for i in range(rangeH):
+			for j in range(rangeW):
+				indexX = map_x[i][j]
+				indexY = map_y[i][j]
+				if indexX > currWidth - 1 or indexY > currHeight - 1 or indexX < 0 or indexY < 0:
+					continue
+				value = img[indexY][indexX]
+				dst[i][j] = value
+	cv2.imwrite("step4.jpg",dst)
 
 
 if __name__ == "__main__":
@@ -327,7 +338,6 @@ if __name__ == "__main__":
 		print(filename)
 		img = cv2.imread(os.path.join(args.input, filename))
 		imgs.append((os.path.splitext(filename)[0],img))
-
 	if args.step == 1:
 		print("Running step 1")
 		modified_imgs = up_to_step_1(imgs)
