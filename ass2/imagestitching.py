@@ -85,7 +85,7 @@ def up_to_step_4(imgs):
 	"""Complete the pipeline and generate a panoramic image"""
 	data = detect_for_step_4(imgs)
 	length = len(data)
-	info = []
+	info = {}
 	match_matrix = np.zeros((length,length))
 	Homo_matrix = [[None for x in range(length)] for y in range(length)] 
 
@@ -107,13 +107,37 @@ def up_to_step_4(imgs):
 
 	centre = np.argmax(np.median(match_matrix,axis=1))
 
-	# print(centre)
-	info.append((np.eye(3),data[centre][1]))
 
-	for i in range(length):
-		if i == centre:
-			continue
-		info.append((Homo_matrix[i][centre],data[i][1]))
+	info[centre] = (np.eye(3),data[centre][1])
+
+
+
+	while len(info.keys()) < length:
+		print(len(info.keys()))
+		for i in range(length):
+			if i in info:
+				continue
+
+			indexes = np.argsort(match_matrix[i,:])[::-1]
+
+			for j in indexes:
+				if j in info:
+					if match_matrix[i][j] > 0:
+						if j == centre:
+							H = np.eye(3)
+						else:
+							H = Homo_matrix[j][centre]
+						info[i] = (np.matmul(H, Homo_matrix[i][j]),data[i][1])
+						break
+
+
+
+	# print(centre)
+
+	# for i in range(length):
+	# 	if i == centre:
+	# 		continue
+	# 	info.append((Homo_matrix[i][centre],data[i][1]))
 
 
 	constructImages(info)
@@ -161,10 +185,10 @@ def detect_for_step_4(imgs):
 	data = []
 	for filename,img in imgs:
 		#------------------------------
-		print(img.shape)
-		img = cylindrical(img)
+		# print(img.shape)
+		# img = cylindrical(img)
 		img = np.array(img,dtype=np.uint8)
-		print(img.shape)
+		# print(img.shape)
 		#------------------------------
 		gray= cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
 		sift = cv2.xfeatures2d.SIFT_create(nfeatures=200)
@@ -277,7 +301,9 @@ def findImageBorder(data):
 	minYs = []
 	maxXs = []
 	maxYs = []
-	for H, img in data:
+	for key in data.keys():
+		H,img = data[key]
+
 		height,width,depth = img.shape
 		indY, indX = np.indices((height, width))
 		rangeIndex = np.stack((indX.ravel(), indY.ravel(), np.ones(indY.size)))
@@ -308,9 +334,10 @@ def constructImages(data):
 
 	dsts = []
 	
+	for key in data.keys():
+		H,img = data[key]
+	# for H, img in data:
 
-	for H, img in data:
-		print(H)
 		currHeight, currWidth, depth = img.shape
 		inverse = np.linalg.inv(H)
 
@@ -333,8 +360,9 @@ def constructImages(data):
 	for item in dsts:
 		item[dst != 0] = 0
 		dst = dst + item
-	# dst = cylindrical(dst)
-	cv2.imwrite("step12.jpg",dst)
+
+	dst = cv2.medianBlur(dst,5).astype(np.uint8)
+	cv2.imwrite("step12_blur.jpg",dst)
 
 def cylindrical(img):
 	height,width,depth = img.shape
