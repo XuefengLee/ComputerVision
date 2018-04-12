@@ -10,6 +10,9 @@ def up_to_step_1(imgs):
 	"""Complete pipeline up to step 3: Detecting features and descriptors"""
 
 	imgs = detect(imgs)
+
+	# for i in range(len(imgs)):
+	# 	imgs[i][1] = cylindrical(imgs[i][1])
 	return imgs
 
 
@@ -20,7 +23,7 @@ def save_step_1(imgs, output_path='./output/step1'):
 		os.makedirs(output_path)
 
 	for filename,img,_,_ in imgs:
-
+		img = cylindrical(img)
 		cv2.imwrite(output_path + '/' + filename + '.jpg',img)
 
 
@@ -157,6 +160,12 @@ def detect(imgs):
 def detect_for_step_4(imgs):
 	data = []
 	for filename,img in imgs:
+		#------------------------------
+		print(img.shape)
+		img = cylindrical(img)
+		img = np.array(img,dtype=np.uint8)
+		print(img.shape)
+		#------------------------------
 		gray= cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
 		sift = cv2.xfeatures2d.SIFT_create(nfeatures=200)
 		kp,des = sift.detectAndCompute(gray,None)
@@ -297,35 +306,35 @@ def constructImages(data):
 	newPictureIndex[0, :] += minX
 	newPictureIndex[1, :] += minY
 
-	dst = np.ones([rangeH, rangeW, 3])
+	dsts = []
+	
 
 	for H, img in data:
 		print(H)
 		currHeight, currWidth, depth = img.shape
 		inverse = np.linalg.inv(H)
+
+		dst = np.zeros([rangeH, rangeW, 3])
+
+		#-------------------------------------------------
 		maps = inverse.dot(newPictureIndex)
 		map_x, map_y = maps[:-1]/maps[-1]
 
-		# map_x = map_x.reshape(rangeH, rangeW).astype(np.float32)
-		# map_y = map_y.reshape(rangeH, rangeW).astype(np.float32)
-		maps /= maps[2, :]
+		map_x, map_y = maps[:-1]/maps[-1]
 
-		map_x = maps[0]
-		map_y = maps[1]
-		map_x = map_x.reshape(rangeH, rangeW).astype(np.int)
-		map_y = map_y.reshape(rangeH, rangeW).astype(np.int)
+		map_x = map_x.reshape(rangeH, rangeW).astype(np.float32)
+		map_y = map_y.reshape(rangeH, rangeW).astype(np.float32)
 
-		for i in range(rangeH):
-			for j in range(rangeW):
-				indexX = map_x[i][j]
-				indexY = map_y[i][j]
-				if indexX > currWidth - 1 or indexY > currHeight - 1 or indexX < 0 or indexY < 0:
-					continue
-				value = img[indexY][indexX]
-				dst[i][j] = value
-		# dst = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
-	dst = cylindrical(dst)
-	cv2.imwrite("step4444.jpg",dst)
+		dst = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
+
+		dsts.append(dst)
+
+	dst = dsts[0]
+	for item in dsts:
+		item[dst != 0] = 0
+		dst = dst + item
+	# dst = cylindrical(dst)
+	cv2.imwrite("step12.jpg",dst)
 
 def cylindrical(img):
 	height,width,depth = img.shape
@@ -333,18 +342,28 @@ def cylindrical(img):
 	centerX = int(width / 2)
 	centerY = int(height / 2)
 	alpha = math.pi / 4
-	f = width / (2 * math.tan(math.pi/4/2));
+	f = width / (2 * math.tan(math.pi/4/2))
 	for i in range(width):
 		for j in range(height):
-			theta = math.asin((i - centerX) / f);
+			theta = math.asin((i - centerX) / f)
 			pointX = int(f * math.tan((i - centerX) / f) + centerX)
 			pointY = int((j - centerY) / math.cos(theta) + centerY)
 			
 			if pointX >= 0 and pointX < width and pointY >= 0 and pointY < height:
-				A[j][i] = img[pointY][pointX];
+				A[j][i] = img[pointY][pointX]
 
 
 	return A
+
+# def re_cyd(img):
+# 	height,width,depth = img.shape
+# 	A = np.zeros(img.shape)
+# 	centerX = int(width / 2)
+# 	centerY = int(height / 2)
+# 	alpha = math.pi / 4
+# 	f = width / (2 * math.tan(math.pi/4/2))
+
+# 	theta = 
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser()
